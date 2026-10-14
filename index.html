@@ -144,6 +144,11 @@ td.kw{font-weight:600;width:22%}
 tr.row{cursor:pointer}
 tr.row:hover td{background:var(--card)}
 tr.exp td{background:var(--card);color:var(--ink2);font-size:14px;padding:4px 8px 16px 48px}
+.pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin-top:20px;font-size:14px}
+.pager button{min-width:36px;height:36px;padding:0 10px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:3px;cursor:pointer;font:inherit;font-variant-numeric:tabular-nums}
+.pager button[aria-current="page"]{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:600}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager[hidden]{display:none}
 .method{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;margin-top:20px;font-size:14px;color:var(--ink2)}
 .method h3{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px}
 .method p{margin:0}
@@ -235,6 +240,7 @@ footer{padding-block:32px 56px;border-top:1px solid var(--line)}
     <thead><tr><th>No.</th><th>유형</th><th>핵심 키워드</th><th>사례</th><th>취재원</th></tr></thead>
     <tbody id="tbody"></tbody>
   </table></div>
+  <nav class="pager" id="pager" aria-label="사례 목록 페이지"></nav>
   <p class="note" style="margin-top:10px">행을 누르면 인터뷰 원문이 펼쳐집니다.</p>
 </div></section>
 
@@ -944,16 +950,23 @@ document.querySelectorAll("#ladder .chip").forEach(b=>b.addEventListener("click"
 
 /* index */
 (function(){
-  let tf="전체", q="";
+  let tf="전체", q="", page=1; const PER=10;
   const chips=document.getElementById("typeChips");
   chips.innerHTML=["전체",...TYPE_ORDER].map(t=>`<button type="button" class="chip" data-t="${t}" aria-pressed="${t==="전체"}">${t}</button>`).join("");
-  chips.addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;tf=b.dataset.t;chips.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===b));draw()});
-  document.getElementById("q").addEventListener("input",e=>{q=e.target.value.trim();draw()});
+  chips.addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;tf=b.dataset.t;page=1;chips.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===b));draw()});
+  document.getElementById("q").addEventListener("input",e=>{q=e.target.value.trim();page=1;draw()});
   const tb=document.getElementById("tbody");
   function draw(){
     const rows=DATA.filter(d=>(tf==="전체"||d.type===tf)&&(!q||[d.kw,d.case,d.quote,d.type].join(" ").includes(q)));
-    document.getElementById("cnt").textContent=`${rows.length}건`;
-    tb.innerHTML=rows.map(d=>`<tr class="row" data-no="${d.no}" tabindex="0" aria-expanded="false"><td class="num">${d.no}</td><td>${esc(d.type)}</td><td class="kw">${esc(d.kw)}</td><td>${esc(d.case)}</td><td style="white-space:nowrap">${d.role} ${d.src}</td></tr>`).join("")||`<tr><td colspan="5" class="note">찾는 사례가 없습니다. 다른 단어로 찾아보세요.</td></tr>`;
+    const pages=Math.max(1,Math.ceil(rows.length/PER)); if(page>pages)page=pages;
+    const start=(page-1)*PER, shown=rows.slice(start,start+PER);
+    document.getElementById("cnt").textContent=rows.length>PER?`${rows.length}건 중 ${start+1}–${start+shown.length}`:`${rows.length}건`;
+    const pg=document.getElementById("pager");
+    pg.hidden=pages<2;
+    pg.innerHTML=pages<2?"":`<button type="button" data-p="${page-1}" ${page<=1?"disabled":""} aria-label="이전 페이지">이전</button>`+
+      Array.from({length:pages},(_,i)=>`<button type="button" data-p="${i+1}" ${i+1===page?'aria-current="page"':""} aria-label="${i+1}페이지">${i+1}</button>`).join("")+
+      `<button type="button" data-p="${page+1}" ${page>=pages?"disabled":""} aria-label="다음 페이지">다음</button>`;
+    tb.innerHTML=shown.map(d=>`<tr class="row" data-no="${d.no}" tabindex="0" aria-expanded="false"><td class="num">${d.no}</td><td>${esc(d.type)}</td><td class="kw">${esc(d.kw)}</td><td>${esc(d.case)}</td><td style="white-space:nowrap">${d.role} ${d.src}</td></tr>`).join("")||`<tr><td colspan="5" class="note">찾는 사례가 없습니다. 다른 단어로 찾아보세요.</td></tr>`;
   }
   function toggle(tr){
     const nx=tr.nextElementSibling;
@@ -963,6 +976,10 @@ document.querySelectorAll("#ladder .chip").forEach(b=>b.addEventListener("click"
     tr.after(e); tr.setAttribute("aria-expanded","true");
   }
   tb.addEventListener("click",e=>{const tr=e.target.closest("tr.row");if(tr)toggle(tr)});
+  document.getElementById("pager").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(!b||b.disabled)return;
+    page=+b.dataset.p; draw();
+    const tw=document.querySelector("#index .tablewrap"); if(tw.getBoundingClientRect().top<0)tw.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+    const cur=document.querySelector('#pager [aria-current="page"]'); if(cur)cur.focus();});
   tb.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches("tr.row")){e.preventDefault();toggle(e.target)}});
   draw();
 })();
